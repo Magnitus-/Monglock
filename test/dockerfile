@@ -1,0 +1,7 @@
+FROM node:4
+
+COPY ./lib /opt/lib
+COPY ./test /opt/test
+COPY ./package.json /opt/
+
+CMD (cd /opt; npm install; npm install -g nodeunit; chmod -R 777 .; npm test)

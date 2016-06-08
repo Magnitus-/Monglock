@@ -1,0 +1,11 @@
+app:
+  container_name: monglock-tests
+  build: .
+  links:
+    - mongodb:mongodb
+mongodb:
+  image: mongo:3.2
+  container_name: monglock-tests-mongodb
+  restart: always
+  volumes:
+    - monglock-tests-files:/data/db

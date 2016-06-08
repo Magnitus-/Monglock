@@ -1,0 +1,26 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "Tests for monglock",
+  "author": "Eric Vallee <eric_vallee@webificservices.com>",
+  "main": "",
+  "licenses": [
+    {
+      "type": "MIT License",
+      "url": "http://mit-license.org/"
+    }
+  ],
+  "dependencies": {
+    "bluebird": "3.x",
+    "mongodb": "2.x",
+    "boom": "3.x",
+    "clone": "1.x"
+  },
+  "scripts": {
+    "test": "nodeunit test"
+  },
+  "license": "MIT",
+  "directories": {
+    "test": "test"
+  }
+}

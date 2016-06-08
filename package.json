@@ -1,0 +1,25 @@
+{
+  "name": "monglock",
+  "version": "1.0.0",
+  "description": "Library that manages MongoDB locks of arbitrary documents on arbitrary collections",
+  "main": "./lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/Magnitus-/Monglock"
+  },
+  "bugs": {
+    "url": "http://github.com/Magnitus-/Monglock/issues",
+    "email": "eric_vallee@webificservices.com"
+  },
+  "scripts": {
+    "test": "cp -r ./lib ./test/lib && (cd ./test; docker-compose build; docker-compose up -d mongodb; docker-compose up app; docker-compose stop mongodb; docker-compose rm -fv mongodb;) && rm -r ./test/lib"
+  },
+  "author": "Eric Vallee (eric_vallee@webificservices.com)",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "3.x",
+    "mongodb": "2.x",
+    "boom": "3.x",
+    "clone": "1.x"
+  }
+}
