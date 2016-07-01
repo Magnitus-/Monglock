@@ -72,9 +72,59 @@ exports.main = {
         });
         
     },
-    'aggressive_locks': function(test) {
-        test.expect(0);
-        test.done();
+    'assertive_locks': function(test) {
+        test.expect(4);
+        var aLock = null;
+        var bLock = null;
+        var testCol = db.collection('test');
+        testCol.insertOne({'_id': 1}).then(() => {
+            var multiLock = monglock.multiLock({
+                db: db,
+                locktimeouts: {
+                    a: 1000,
+                    b: 1000
+                },
+                lockRelationships: {
+                    a: {'cooperative': ['b']},
+                    b: {'assertive': ['a']}
+                },
+                collection: 'test',
+                timeout: 1000,
+                w: 1
+            });
+            return multiLock.acquire({'_id': 1}, {'tag': 'a'}).then((lock) => {
+                aLock = lock;
+            }).then(() => {
+                return multiLock.acquire({'_id': 1}, {'tag': 'b'}).catch((err) => {
+                    bLock = err.output.payload.lock;
+                    test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && 
+                            err.output.payload.message == 'AssertiveLock' && err.output.payload.lock, "Ensuring locks we are assertive on prevent access, but that the lock is still grabbed.");
+                });
+            }).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': aLock, 'tag': 'a'}).then(() => {
+                    return multiLock.acquire({'_id': 1}, {'tag': 'a'}).catch((err) => {
+                        test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring locks we are assertive on was grabbed.");
+                    });
+                }).then(() => {
+                    return multiLock.acquire({'_id': 1}, {'tag': 'b', 'lock': bLock}).then((lock) => {
+                        test.ok(lock && lock.timestamp == bLock.timestamp && lock.id.equals(bLock.id), "Ensuring that second attemp to grab lock once lock we are assertive on is freed succeeds");
+                    }); 
+                }).then(() => {
+                    return multiLock.release({'_id': 1}, {'tag': 'b', 'lock': bLock}).then(() => {
+                        return multiLock.acquire({'_id': 1}, {'tag': 'a'});
+                    }).then((lock) => {
+                        aLock = lock;
+                        test.ok(lock, "Ensuring that the release of the assertive lock happened without problems");
+                    }).then(() => {
+                        return multiLock.acquire({'_id': 1}, {'tag': 'a', 'lock': aLock});
+                    });
+                });
+            });
+        }).catch((err) => {
+            console.log(err);
+        }).finally(() => {
+            test.done();
+        });
     },
     'concurrent_locks': function(test) {
         test.expect(0);
