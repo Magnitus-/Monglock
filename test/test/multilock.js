@@ -127,8 +127,58 @@ exports.main = {
         });
     },
     'concurrent_locks': function(test) {
-        test.expect(0);
-        test.done();
+        test.expect(4);
+        var aLock = null;
+        var bLock = null;
+        var cLock = null;
+        var testCol = db.collection('test');
+        testCol.insertOne({'_id': 1}).then(() => {
+            var multiLock = monglock.multiLock({
+                db: db,
+                locktimeouts: {
+                    a: 2000,
+                    b: 2000,
+                    c: 2000
+                },
+                lockRelationships: {
+                    a: {'cooperative': ['c']},
+                    b: {'cooperative': ['c']},
+                    c: {'cooperative': ['a', 'b']}
+                },
+                collection: 'test',
+                timeout: 1000,
+                w: 1
+            });
+            return multiLock.acquire({'_id': 1}, {'tag': 'a'}).then((lock) => {
+                aLock = lock;
+                return multiLock.acquire({'_id': 1}, {'tag': 'b'});
+            }).then((lock) => {
+                test.ok(lock, "Confirming that two concurrent locks can be grabbed at the same time");
+                bLock = lock;
+                return multiLock.acquire({'_id': 1}, {'tag': 'c'}).catch((err) => {
+                    test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring that concurrent locks still prevent access properly.");
+                });
+            }).then(() => {
+                return multiLock.release({'_id': 1}, {'tag': 'a', 'lock': aLock}).then(() => {
+                    return multiLock.acquire({'_id': 1}, {'tag': 'c'}).catch((err) => {
+                        test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring that concurrent locks prevent access properly when there is at least one lock remaining.");
+                    });
+                });
+            }).then(() => {
+                return multiLock.release({'_id': 1}, {'tag': 'b', 'lock': bLock}).then(() => {
+                    return multiLock.acquire({'_id': 1}, {'tag': 'c'}).then((lock) => {
+                        cLock = lock;
+                        test.ok(lock, "Confirming that releasing multiple concurrent locks work properly");
+                    });
+                });
+            }).then(() => {
+                return multiLock.release({'_id': 1}, {'tag': 'c', 'lock': cLock})
+            });
+        }).catch((err) => {
+            console.log(err);
+        }).finally(() => {
+            test.done();
+        });
     },
     'lock_timeouts': function(test) {
         test.expect(0);
