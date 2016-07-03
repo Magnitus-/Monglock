@@ -199,7 +199,7 @@ Note: tagA and tagB should never be the same and two different tags should never
 module.multiLock(<params>)
 ```
 
-Returns a writeLock instance from which locks can be acquired and released.
+Returns a multiLock instance from which locks can be acquired and released.
 
 'params' is an object with the following properties:
 
@@ -212,15 +212,164 @@ Returns a writeLock instance from which locks can be acquired and released.
 
 ####Acquire
 
-...
+```
+multiLockInstance.acquire(<filter>, <params>)
+```
+
+Returns a promise that passes a lock on success (to 'then' handler) or error on failure (to 'catch' handler).
+
+'filter' is an object that uniquely identifies the document you want to obtain a lock on.
+
+'params' take all the properties of the constructor (allowing you to override them at acquire time) except for 'locktimeouts' and 'lockRelationships'. Additionally, either a 'tag' property (to specify the type of lock for a new lock) or a 'lock' property (to proceed with lock waiting on locks it is 'assertive' on to be freed) is required.
+
+Errors:
+
+Errors are Boom objects (properties of the error can be examined in the err.output.payload object) that can have the following properties:
+
+```
+err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+```
+
+This means the document you tried to acquire a lock on doesn't exist
+
+```
+err.output.payload.statusCode == 409, err.output.payload.message == 'CooperativeLock'
+```
+
+This means the document is held by at least one lock that the lock you are trying to acquire is 'cooperative' with.
+
+```
+err.output.payload.statusCode == 409, err.output.payload.message == 'AssertiveLock', err.output.payload.lock == <your lock>
+```
+
+This means the document is held by at least one lock that the lock you are trying to acquire is 'assertive' with.
+
+The lock was acquired, but you should make the acquire call again until all locks your lock is assertive on are freed.
+
+```
+err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+```
+
+Some other database error, probably a timeout on a database operation.
 
 ####Release
 
-...
+```
+multiLockInstance.release(<filter>, <params>)
+```
+
+'filter' is an object that uniquely identifies the document you want to release the lock on.
+
+'params' take all the properties of the constructor (allowing you to override them at acquire time) except for 'locktimeouts' and 'lockRelationships'. Additionally, it takes a 'lock' property identifying the lock to release.
+
+Returns a promise that passes nothing on success (to 'then' handler) or error on failure (to 'catch' handler).
+
+Errors:
+
+```
+err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+```
+
+This means the document you tried to release a lock on doesn't exist
+
+```
+err.output.payload.statusCode == 409, err.output.payload.message == 'LockNotFound'
+```
+
+This means the lock you tried to release in the document did not exist
+
+
+```
+err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+```
+
+Some other database error, probably a timeout on a database operation.
 
 ###Example
 
-...
+```
+const mongoDB = require('mongodb');
+Promise = require('bluebird');
+
+const monglock = require('monglock');
+
+var multiLock = null;
+var lockInstance = null;
+
+mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}, (err, db) => {
+    const testCol = db.collection('test');
+    
+    //Build multiLock instance
+    //Here, we have a read/write multiLock, where reads are concurrent and cooperative with writes while writes are cooperative with each other and assertive with reads
+    multiLock = monglock.multiLock({
+        'collection': 'test', 
+        'db': db, 
+        'locktimeout': 1000,
+        'locktimeouts': {
+            'read': 2000,
+            'write': 20000
+        },
+        'lockRelationships': {
+            'read': {
+                'cooperative': ['write']
+            },
+            'write': {
+                'cooperative: ['write'],
+                'assertive': ['read']
+            }
+        },
+        'collection': 'test',
+        'timeout': 10000,
+        'w': 'majority'
+    });
+    
+    //Create a test document to acquire locks on
+    testCol.insertOne({'_id': 1}).then(() => {
+        return multiLock.acquire({'_id': 1}, {'tag': 'write'}).then((lock) => {
+            lockInstance = lock;
+            
+            //We have the lock, do your write
+            
+            //Now, let's release the lock
+            return multiLock.release({'_id': 1}, {'lock': lockInstance}).then(() => {
+                //All done!
+            }).catch((err) => {
+                if(err.output.payload.message == 'RessourceNotFound')
+                {
+                    //Seems the document we are operating on got deleted
+                }
+                else if(err.output.payload.message == 'LockNotFound')
+                {
+                    //Not sure what happened there, but our lock is gone... probably a programming error
+                }
+                else
+                {
+                    //Db error, probably a timeout
+                }
+            });
+        }).catch((err) => {
+            if(err.output.payload.message == 'RessourceNotFound')
+            {
+                //document doesn't exist, maybe it got deleted elsewhere
+            }
+            else if(err.output.payload.message == 'CooperativeLock')
+            {
+                //Other write in progress, will have to wait
+            }
+            else if(err.output.payload.message == 'AssertiveLock')
+            {
+                //Read in progress, lock was acquired assertively, but will have to call acquire again to make sure all reads are finished
+                //Don't forget to store the lock!
+                lockInstance = err.output.payload.lock;
+            }
+            else
+            {
+                //Db error, probably a timeout
+            }
+        });
+    });
+});
+```
 
 ###High Traffic Note
 
