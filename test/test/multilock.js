@@ -49,20 +49,20 @@ exports.main = {
                     test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring cooperative locks prevent access.");
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'lock': aLock, 'tag': 'a'}).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': aLock}).then(() => {
                     return multiLock.acquire({'_id': 1}, {'tag': 'a'});
                 }).then((lock) => {
                     aLock = lock;
                     test.ok(lock, "Ensure that acquiring a lock failed without holding the lock.");
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'lock': aLock, 'tag': 'a'}).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': aLock}).then(() => {
                     return multiLock.acquire({'_id': 1}, {'tag': 'b'});
                 }).then((lock) => {
                     bLock = lock;
                     test.ok(lock, "Ensure that releasing a lock works.");
                 }).then(() => {
-                    return multiLock.release({'_id': 1}, {'lock': bLock, 'tag': 'b'});
+                    return multiLock.release({'_id': 1}, {'lock': bLock});
                 });
             });
         }).catch((err) => {
@@ -101,22 +101,22 @@ exports.main = {
                             err.output.payload.message == 'AssertiveLock' && err.output.payload.lock, "Ensuring locks we are assertive on prevent access, but that the lock is still grabbed.");
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'lock': aLock, 'tag': 'a'}).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': aLock}).then(() => {
                     return multiLock.acquire({'_id': 1}, {'tag': 'a'}).catch((err) => {
                         test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring locks we are assertive on was grabbed.");
                     });
                 }).then(() => {
-                    return multiLock.acquire({'_id': 1}, {'tag': 'b', 'lock': bLock}).then((lock) => {
+                    return multiLock.acquire({'_id': 1}, {'lock': bLock}).then((lock) => {
                         test.ok(lock && lock.timestamp == bLock.timestamp && lock.id.equals(bLock.id), "Ensuring that second attemp to grab lock once lock we are assertive on is freed succeeds");
                     }); 
                 }).then(() => {
-                    return multiLock.release({'_id': 1}, {'tag': 'b', 'lock': bLock}).then(() => {
+                    return multiLock.release({'_id': 1}, {'lock': bLock}).then(() => {
                         return multiLock.acquire({'_id': 1}, {'tag': 'a'});
                     }).then((lock) => {
                         aLock = lock;
                         test.ok(lock, "Ensuring that the release of the assertive lock happened without problems");
                     }).then(() => {
-                        return multiLock.acquire({'_id': 1}, {'tag': 'a', 'lock': aLock});
+                        return multiLock.acquire({'_id': 1}, {'lock': aLock});
                     });
                 });
             });
@@ -159,20 +159,20 @@ exports.main = {
                     test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring that concurrent locks still prevent access properly.");
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'tag': 'a', 'lock': aLock}).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': aLock}).then(() => {
                     return multiLock.acquire({'_id': 1}, {'tag': 'c'}).catch((err) => {
                         test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock', "Ensuring that concurrent locks prevent access properly when there is at least one lock remaining.");
                     });
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'tag': 'b', 'lock': bLock}).then(() => {
+                return multiLock.release({'_id': 1}, {'lock': bLock}).then(() => {
                     return multiLock.acquire({'_id': 1}, {'tag': 'c'}).then((lock) => {
                         cLock = lock;
                         test.ok(lock, "Confirming that releasing multiple concurrent locks work properly");
                     });
                 });
             }).then(() => {
-                return multiLock.release({'_id': 1}, {'tag': 'c', 'lock': cLock})
+                return multiLock.release({'_id': 1}, {'lock': cLock})
             });
         }).catch((err) => {
             console.log(err);
@@ -255,7 +255,7 @@ exports.main = {
             test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 404 && err.output.payload.message == 'RessourceNotFound', "Ensuring that lock on non-existent ressource fails with the right error.");
         }).then(() => {
             return testCol.insertOne({'_id': 1}).then(() => {
-                return multiLock.release({'_id': 1}, {'tag': 'a', 'lock': {'timestamp': 12334324324, 'id': 'lalalala'}}).catch((err) => {
+                return multiLock.release({'_id': 1}, {'lock': {'timestamp': 12334324324, 'id': 'lalalala', 'tag': 'a'}}).catch((err) => {
                     test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'LockNotFound', "Ensuring that releasing a non-existent lock fails with the right error.");
                 });
             });
