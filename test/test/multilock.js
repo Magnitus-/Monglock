@@ -181,11 +181,88 @@ exports.main = {
         });
     },
     'lock_timeouts': function(test) {
-        test.expect(0);
-        test.done();
+        test.expect(3);
+        var aLock = null;
+        var bLock = null;
+        var cLock = null;
+        var testCol = db.collection('test');
+        testCol.insertOne({'_id': 1}).then(() => {
+            var multiLock = monglock.multiLock({
+                db: db,
+                locktimeouts: {
+                    a: 100,
+                    b: 400,
+                    c: 1000,
+                    d: 1000
+                },
+                lockRelationships: {
+                    a: {},
+                    b: {},
+                    c: {},
+                    d: {'cooperative': ['a','b','c']}
+                },
+                collection: 'test',
+                timeout: 1000,
+                w: 1
+            });
+            return Promise.all([multiLock.acquire({'_id': 1}, {'tag': 'a'}),
+                                multiLock.acquire({'_id': 1}, {'tag': 'b'}),
+                                multiLock.acquire({'_id': 1}, {'tag': 'c'})]).then((locks) => {
+                aLock = locks[0];
+                bLock = locks[1];
+                cLock = locks[2];
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        multiLock.acquire({'_id': 1}, {'tag': 'd'}).then(() => {reject()}).catch((err) => {
+                            test.ok(err, "Confirming that timeout is respected for all locks");
+                            setTimeout(() => {
+                                multiLock.acquire({'_id': 1}, {'tag': 'd'}).then(() => {reject()}).catch((err) => {
+                                    test.ok(err, "Confirming that timeout is respected for all locks");
+                                    setTimeout(() => {
+                                        multiLock.acquire({'_id': 1}, {'tag': 'd'}).then((lock) => {
+                                            test.ok(lock, "Confirming that locks timeout");
+                                            resolve();
+                                        });
+                                    }, 690);     
+                                });
+                            }, 300);
+                        });
+                    }, 110);
+                });
+            });
+        }).catch((err) => {
+            console.log(err);
+        }).finally(() => {
+            test.done();
+        });
     },
     'misuse': function(test) {
-        test.expect(0);
-        test.done();
+        test.expect(2);
+        var testCol = db.collection('test');
+        var multiLock = monglock.multiLock({
+            db: db,
+            locktimeouts: {
+                a: 100,
+            },
+            lockRelationships: {
+                a: {'cooperative': ['a']}
+            },
+            collection: 'test',
+            timeout: 1000,
+            w: 1
+        });
+        multiLock.acquire({'_id': 1}, {'tag': 'a'}).catch((err) => {
+            test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 404 && err.output.payload.message == 'RessourceNotFound', "Ensuring that lock on non-existent ressource fails with the right error.");
+        }).then(() => {
+            return testCol.insertOne({'_id': 1}).then(() => {
+                return multiLock.release({'_id': 1}, {'tag': 'a', 'lock': {'timestamp': 12334324324, 'id': 'lalalala'}}).catch((err) => {
+                    test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && err.output.payload.message == 'LockNotFound', "Ensuring that releasing a non-existent lock fails with the right error.");
+                });
+            });
+        }).catch((err) => {
+            console.log(err);
+        }).finally(() => {
+            test.done();
+        });
     }
 }
