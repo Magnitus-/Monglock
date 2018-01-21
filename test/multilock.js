@@ -1,36 +1,46 @@
-const mongoDB = require('mongodb');
+const mongodb = require('mongodb');
 Promise = require('bluebird');
 
 const monglock = require('../lib/index');
 
-var db = null;
-
 exports.main = {
     'setUp': function(callback) {
-        mongoDB.MongoClient.connect("mongodb://database:27017/test", {native_parser:true}, (err, database) => {
-            if(err) {
+        mongodb.MongoClient.connect('mongodb://database:27017', {native_parser:true})
+            .then((conn) => {
+                this.conn = conn;
+                return conn.db('test').collection('test');
+            })
+            .then((testCol) => {
+                return testCol.remove({});
+            })
+            .then(() => {
+                callback();
+            })
+            .catch((err) => {
                 console.log(err);
                 throw err;
-            }
-            db = database;
-            const testCol = db.collection('test');
-            testCol.remove({}).then(() => {
-                callback();
-            });
-        });
+            })
     },
     'tearDown': function(callback) {
-        const testCol = db.collection('test');
-        testCol.remove({}).then(() => {
-            db.close();
-            callback();
-        });
+        const testCol = this.conn.db('test').collection('test');
+        testCol.drop()
+            .then(() => {
+                this.conn.close(true);
+            })
+            .then(() => {
+                callback();
+            })
+            .catch((err) => {
+                console.log(err);
+                throw err;
+            })
     },
     'cooperative_locks': function(test) {
         test.expect(3);
         var aLock = null;
         var bLock = null;
-        var testCol = db.collection('test');
+        const db = this.conn.db('test');
+        const testCol = db.collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
                 db: db,
@@ -80,7 +90,8 @@ exports.main = {
         test.expect(4);
         var aLock = null;
         var bLock = null;
-        var testCol = db.collection('test');
+        const db = this.conn.db('test');
+        const testCol = db.collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
                 db: db,
@@ -135,7 +146,8 @@ exports.main = {
         var aLock = null;
         var bLock = null;
         var cLock = null;
-        var testCol = db.collection('test');
+        const db = this.conn.db('test');
+        const testCol = db.collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
                 db: db,
@@ -189,7 +201,8 @@ exports.main = {
         var aLock = null;
         var bLock = null;
         var cLock = null;
-        var testCol = db.collection('test');
+        const db = this.conn.db('test');
+        const testCol = db.collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
                 db: db,
@@ -242,7 +255,8 @@ exports.main = {
     },
     'misuse': function(test) {
         test.expect(2);
-        var testCol = db.collection('test');
+        const db = this.conn.db('test');
+        const testCol = db.collection('test');
         var multiLock = monglock.multiLock({
             db: db,
             locktimeouts: {

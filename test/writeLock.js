@@ -1,33 +1,42 @@
-const mongoDB = require('mongodb');
+const mongodb = require('mongodb');
 Promise = require('bluebird');
 
 const monglock = require('../lib/index');
 
-var db = null;
-
 exports.main = {
     'setUp': function(callback) {
-        mongoDB.MongoClient.connect("mongodb://database:27017/test", {native_parser:true}, (err, database) => {
-            if(err) {
-                console.log(err);
-                throw err;
-            }
-            db = database;
-            const testCol = db.collection('test');
-            testCol.remove({}).then(() => {
+        mongodb.MongoClient.connect('mongodb://database:27017')
+            .then((conn) => {
+                this.conn = conn;
+                return conn.db('test').collection('test');
+            })
+            .then((testCol) => {
+                return testCol.remove({});
+            })
+            .then(() => {
                 callback();
-            });
-        });
+            })
+            .catch((err) => {
+                throw err;
+            })
     },
     'tearDown': function(callback) {
-        const testCol = db.collection('test');
-        testCol.remove({}).then(() => {
-            db.close();
-            callback();
-        });
+        const testCol = this.conn.db('test').collection('test');
+        testCol.drop()
+            .then(() => {
+                this.conn.close(true);
+            })
+            .then(() => {
+                callback();
+            })
+            .catch((err) => {
+                console.log(err);
+                throw err;
+            })
     },
     'basic_functionality': function(test) {
         test.expect(8);
+        const db = this.conn.db('test');
         const testCol = db.collection('test');
         var writeLock = null;
         var timestamp = null;
