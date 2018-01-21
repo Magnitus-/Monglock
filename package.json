@@ -12,14 +12,17 @@
     "email": "eric_vallee@webificservices.com"
   },
   "scripts": {
-    "test": "cp -r ./lib ./test/lib && (cd ./test; docker-compose build; docker-compose up -d mongodb; docker-compose up app; docker-compose stop mongodb; docker-compose rm -fv mongodb;) && rm -r ./test/lib"
+    "test": "nodeunit test"
   },
   "author": "Eric Vallee (eric_vallee@webificservices.com)",
   "license": "MIT",
   "dependencies": {
     "bluebird": "3.x",
-    "mongodb": "2.x",
     "boom": "3.x",
-    "clone": "1.x"
+    "clone": "1.x",
+    "mongodb": "2.x"
+  },
+  "devDependencies": {
+    "nodeunit": "^0.11.2"
   }
 }

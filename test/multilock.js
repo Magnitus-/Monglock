@@ -7,7 +7,11 @@ var db = null;
 
 exports.main = {
     'setUp': function(callback) {
-        mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}, (err, database) => {
+        mongoDB.MongoClient.connect("mongodb://database:27017/test", {native_parser:true}, (err, database) => {
+            if(err) {
+                console.log(err);
+                throw err;
+            }
             db = database;
             const testCol = db.collection('test');
             testCol.remove({}).then(() => {
@@ -70,7 +74,7 @@ exports.main = {
         }).finally(() => {
             test.done();
         });
-        
+
     },
     'assertive_locks': function(test) {
         test.expect(4);
@@ -97,7 +101,7 @@ exports.main = {
             }).then(() => {
                 return multiLock.acquire({'_id': 1}, {'tag': 'b'}).catch((err) => {
                     bLock = err.output.payload.lock;
-                    test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 && 
+                    test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 &&
                             err.output.payload.message == 'AssertiveLock' && err.output.payload.lock, "Ensuring locks we are assertive on prevent access, but that the lock is still grabbed.");
                 });
             }).then(() => {
@@ -108,7 +112,7 @@ exports.main = {
                 }).then(() => {
                     return multiLock.acquire({'_id': 1}, {'lock': bLock}).then((lock) => {
                         test.ok(lock && lock.timestamp == bLock.timestamp && lock.id.equals(bLock.id), "Ensuring that second attemp to grab lock once lock we are assertive on is freed succeeds");
-                    }); 
+                    });
                 }).then(() => {
                     return multiLock.release({'_id': 1}, {'lock': bLock}).then(() => {
                         return multiLock.acquire({'_id': 1}, {'tag': 'a'});
@@ -223,7 +227,7 @@ exports.main = {
                                             test.ok(lock, "Confirming that locks timeout");
                                             resolve();
                                         });
-                                    }, 690);     
+                                    }, 690);
                                 });
                             }, 300);
                         });

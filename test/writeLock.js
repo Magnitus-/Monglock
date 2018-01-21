@@ -7,7 +7,11 @@ var db = null;
 
 exports.main = {
     'setUp': function(callback) {
-        mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}, (err, database) => {
+        mongoDB.MongoClient.connect("mongodb://database:27017/test", {native_parser:true}, (err, database) => {
+            if(err) {
+                console.log(err);
+                throw err;
+            }
             db = database;
             const testCol = db.collection('test');
             testCol.remove({}).then(() => {
