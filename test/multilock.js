@@ -39,11 +39,9 @@ exports.main = {
         test.expect(3);
         var aLock = null;
         var bLock = null;
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
-                db: db,
                 locktimeouts: {
                     a: 1000,
                     b: 1000
@@ -52,7 +50,7 @@ exports.main = {
                     a: {'cooperative': ['b']},
                     b: {'cooperative': ['a']}
                 },
-                collection: 'test',
+                collection: testCol,
                 timeout: 1000,
                 w: 1
             });
@@ -90,11 +88,9 @@ exports.main = {
         test.expect(4);
         var aLock = null;
         var bLock = null;
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
-                db: db,
                 locktimeouts: {
                     a: 1000,
                     b: 1000
@@ -103,7 +99,7 @@ exports.main = {
                     a: {'cooperative': ['b']},
                     b: {'assertive': ['a']}
                 },
-                collection: 'test',
+                collection: testCol,
                 timeout: 1000,
                 w: 1
             });
@@ -146,11 +142,9 @@ exports.main = {
         var aLock = null;
         var bLock = null;
         var cLock = null;
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
-                db: db,
                 locktimeouts: {
                     a: 2000,
                     b: 2000,
@@ -161,7 +155,7 @@ exports.main = {
                     b: {'cooperative': ['c']},
                     c: {'cooperative': ['a', 'b']}
                 },
-                collection: 'test',
+                collection: testCol,
                 timeout: 1000,
                 w: 1
             });
@@ -201,11 +195,9 @@ exports.main = {
         var aLock = null;
         var bLock = null;
         var cLock = null;
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         testCol.insertOne({'_id': 1}).then(() => {
             var multiLock = monglock.multiLock({
-                db: db,
                 locktimeouts: {
                     a: 100,
                     b: 400,
@@ -218,7 +210,7 @@ exports.main = {
                     c: {},
                     d: {'cooperative': ['a','b','c']}
                 },
-                collection: 'test',
+                collection: testCol,
                 timeout: 1000,
                 w: 1
             });
@@ -255,17 +247,15 @@ exports.main = {
     },
     'misuse': function(test) {
         test.expect(2);
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         var multiLock = monglock.multiLock({
-            db: db,
             locktimeouts: {
                 a: 100,
             },
             lockRelationships: {
                 a: {'cooperative': ['a']}
             },
-            collection: 'test',
+            collection: testCol,
             timeout: 1000,
             w: 1
         });

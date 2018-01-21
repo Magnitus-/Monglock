@@ -36,12 +36,11 @@ exports.main = {
     },
     'basic_functionality': function(test) {
         test.expect(8);
-        const db = this.conn.db('test');
-        const testCol = db.collection('test');
+        const testCol = this.conn.db('test').collection('test');
         var writeLock = null;
         var timestamp = null;
         testCol.insertOne({'_id': 1}).then(() => {
-            writeLock = monglock.writeLock({'collection': 'test', 'db': db, 'locktimeout': 1000});
+            writeLock = monglock.writeLock({'collection': testCol, 'locktimeout': 1000});
             return writeLock.acquire({'_id': 1});
         }).then(() => {
             return testCol.findOne({'_id': 1}).then((value) => {
