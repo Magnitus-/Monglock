@@ -2,9 +2,9 @@
 
 Mongodb locking library that operates on arbitrary documents in arbitrary collections.
 
-It returns promises and optionally, it can return boom (as in the npm library) wrapped errors.
+It returns promises and optionally, it can wrap its errors with boom (as in the npm library).
 
-Behavior when a lock cannot be acquired is to return an error and let the caller determine how to handle retrying.
+Behavior when a lock cannot be acquired is to trigger an error and let the caller determine how to handle retrying.
 
 ## Note About Locks
 
@@ -22,11 +22,11 @@ You can use a projection during queries to hide this property from user-facing r
 
 ## About usage with the boom library
 
-Version 1 of the library always returned boom errors (I was doing a lot of hapi at the time).
+Version 1 of the library always returned boom errors.
 
-However, it quickly occured to me that someone (most likely myself in the future) might want to use the library outside the context of hapi or even outside the context of a web server.
+However, it quickly occured to me that I might want to use the library outside the context of hapi or even outside the context of a web server.
 
-Add to this the changing versions of boom (which may or may not be coupled to particular versions of hapi) and the fact that recent versions of boom require node >= 8 (which seem gratuitous to me given the limited scope of what it does) and it became clear that I had to decouple this library from boom and especially from a particular version of boom.
+Add to this the changing versions of boom (which may or may not be coupled to particular versions of hapi) and the fact that recent versions of boom require node >= 8 (which seem gratuitous to me given the limited scope of what it does) and it became clear that this library had to be decoupled from boom and especially from a particular version of boom.
 
 So, while, you can still wrap errors that are returned by this library with boom. In order to do so, you'll now need to require the boom module you are using and pass it to the locks' constructor.
 
@@ -325,6 +325,7 @@ Errors:
 err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
 
 //Without boom:
+err.type == 'notFound' && err.subtype == 'RessourceNotFound'
 ```
 
 This means the document you tried to release a lock on doesn't exist
@@ -334,6 +335,7 @@ This means the document you tried to release a lock on doesn't exist
 err.output.payload.statusCode == 409, err.output.payload.message == 'LockNotFound'
 
 //Without boom:
+err.type == 'conflict' && err.subtype == 'LockNotFound'
 ```
 
 This means the lock you tried to release in the document did not exist
@@ -344,6 +346,7 @@ This means the lock you tried to release in the document did not exist
 err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
 
 //Without boom:
+err.type == badImplementation && err.subtype == 'DbError'
 ```
 
 Some other database error, probably a timeout on a database operation.
@@ -353,20 +356,20 @@ Some other database error, probably a timeout on a database operation.
 ```
 const mongoDB = require('mongodb');
 Promise = require('bluebird');
+const boom = require('boom');
 
 const monglock = require('monglock');
 
 var multiLock = null;
 var lockInstance = null;
 
-mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}, (err, db) => {
-    const testCol = db.collection('test');
+mongoDB.MongoClient.connect("mongodb://mongodb:27017", {native_parser:true}, (err, conn) => {
+    const testCol = conn.db('test').collection('test');
 
     //Build multiLock instance
     //Here, we have a read/write multiLock, where reads are concurrent and cooperative with writes while writes are cooperative with each other and assertive with reads
     multiLock = monglock.multiLock({
         'collection': 'test',
-        'db': db,
         'locktimeout': 1000,
         'locktimeouts': {
             'read': 2000,
@@ -381,9 +384,10 @@ mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}
                 'assertive': ['read']
             }
         },
-        'collection': 'test',
+        'collection': testCol,
         'timeout': 10000,
-        'w': 'majority'
+        'w': 'majority',
+        'boom': boom
     });
 
     //Create a test document to acquire locks on
