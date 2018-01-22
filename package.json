@@ -3,6 +3,10 @@
   "version": "2.0.0",
   "description": "Library that manages MongoDB locks of arbitrary documents on arbitrary collections",
   "main": "./lib/index.js",
+  "keywords": [
+    "mongodb",
+    "lock"
+  ],
   "repository": {
     "type": "git",
     "url": "http://github.com/Magnitus-/Monglock"
@@ -18,12 +22,12 @@
   "license": "MIT",
   "dependencies": {
     "bluebird": "^3.5.1",
-    "boom": "^3.2.2",
     "clone": "^2.1.1",
     "mongodb": "^3.0.1"
   },
   "devDependencies": {
-    "nodeunit": "^0.11.2"
+    "nodeunit": "^0.11.2",
+    "boom": "^5.2.0"
   },
   "files": [
     "lib/*.js",

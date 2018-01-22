@@ -1,5 +1,6 @@
 const mongodb = require('mongodb');
 Promise = require('bluebird');
+const boom = require('boom');
 
 const monglock = require('../lib/index');
 
@@ -52,7 +53,8 @@ exports.main = {
                 },
                 collection: testCol,
                 timeout: 1000,
-                w: 1
+                w: 1,
+                boom: boom
             });
             return multiLock.acquire({'_id': 1}, {'tag': 'a'}).then((lock) => {
                 aLock = lock;
@@ -101,15 +103,17 @@ exports.main = {
                 },
                 collection: testCol,
                 timeout: 1000,
-                w: 1
+                w: 1,
+                boom: boom
             });
             return multiLock.acquire({'_id': 1}, {'tag': 'a'}).then((lock) => {
                 aLock = lock;
             }).then(() => {
                 return multiLock.acquire({'_id': 1}, {'tag': 'b'}).catch((err) => {
-                    bLock = err.output.payload.lock;
+                    bLock = err.data;
                     test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 409 &&
-                            err.output.payload.message == 'AssertiveLock' && err.output.payload.lock, "Ensuring locks we are assertive on prevent access, but that the lock is still grabbed.");
+                            err.output.payload.message == 'AssertiveLock' &&
+                            err.data && err.data.id && err.data.tag && err.data.timestamp, "Ensuring locks we are assertive on prevent access, but that the lock is still grabbed.");
                 });
             }).then(() => {
                 return multiLock.release({'_id': 1}, {'lock': aLock}).then(() => {
@@ -157,7 +161,8 @@ exports.main = {
                 },
                 collection: testCol,
                 timeout: 1000,
-                w: 1
+                w: 1,
+                boom: boom
             });
             return multiLock.acquire({'_id': 1}, {'tag': 'a'}).then((lock) => {
                 aLock = lock;
@@ -212,7 +217,8 @@ exports.main = {
                 },
                 collection: testCol,
                 timeout: 1000,
-                w: 1
+                w: 1,
+                boom: boom
             });
             return Promise.all([multiLock.acquire({'_id': 1}, {'tag': 'a'}),
                                 multiLock.acquire({'_id': 1}, {'tag': 'b'}),
@@ -257,7 +263,8 @@ exports.main = {
             },
             collection: testCol,
             timeout: 1000,
-            w: 1
+            w: 1,
+            boom: boom
         });
         multiLock.acquire({'_id': 1}, {'tag': 'a'}).catch((err) => {
             test.ok(err && err.output && err.output.payload && err.output.payload.statusCode == 404 && err.output.payload.message == 'RessourceNotFound', "Ensuring that lock on non-existent ressource fails with the right error.");

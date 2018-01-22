@@ -1,5 +1,6 @@
 const mongodb = require('mongodb');
 Promise = require('bluebird');
+const boom = require('boom');
 
 const monglock = require('../lib/index');
 
@@ -40,7 +41,7 @@ exports.main = {
         var writeLock = null;
         var timestamp = null;
         testCol.insertOne({'_id': 1}).then(() => {
-            writeLock = monglock.writeLock({'collection': testCol, 'locktimeout': 1000});
+            writeLock = monglock.writeLock({'collection': testCol, 'locktimeout': 1000, 'boom': boom});
             return writeLock.acquire({'_id': 1});
         }).then(() => {
             return testCol.findOne({'_id': 1}).then((value) => {
