@@ -2,7 +2,7 @@
 
 Mongodb locking library that operates on arbitrary documents in arbitrary collections.
 
-It returns promises and errors are generated using the boom library.
+It returns promises and optionally, it can return boom (as in the npm library) wrapped errors.
 
 Behavior when a lock cannot be acquired is to return an error and let the caller determine how to handle retrying.
 
@@ -19,6 +19,18 @@ As an extreme example, you could use this library to secure a lock on each colle
 Both the writeLock and multiLock operate on one document at a time and will create and manage 'lock' property in the database document it acquires a lock on.
 
 You can use a projection during queries to hide this property from user-facing results (or do it elsewhere in your code).
+
+## About usage with the boom library
+
+Version 1 of the library always returned boom errors (I was doing a lot of hapi at the time).
+
+However, it quickly occured to me that someone (most likely myself in the future) might want to use the library outside the context of hapi or even outside the context of a web server.
+
+Add to this the changing versions of boom (which may or may not be coupled to particular versions of hapi) and the fact that recent versions of boom require node >= 8 (which seem gratuitous to me given the limited scope of what it does) and it became clear that I had to decouple this library from boom and especially from a particular version of boom.
+
+So, while, you can still wrap errors that are returned by this library with boom. In order to do so, you'll now need to require the boom module you are using and pass it to the locks' constructor.
+
+The test environment for the library is with boom version 5 (lastest that was still at least compatible with node 6). However, I looked at the boom api for version 3, 5 and 7 and ensured that the calls that are done internally are the same across all those versions.
 
 ## writeLock
 
@@ -37,10 +49,10 @@ Returns a writeLock instance from which locks can be acquired and released.
 'params' is an object with the following properties:
 
 - locktimeout: How long (in milliseconds) a lock will be held before getting automatically released. Ideally, this value should be high enough to give operations plenty of time to complete and release the lock, but not so high that the database will require manual intervention if a process fails while holding the lock and fails to release it. Defaults to 10000 (10 seconds).
-- collection: Name of the collection containing documents to acquire a lock on. Defaults to 'lock'.
+- collection: A mongodb collection instance containing documents to acquire a lock on.
 - timeout: How long single database read/write operations from the library should wait before declaring failure. Defaults to 10000 (10 seconds).
 - w: Replication parameter for write operations (1 to return after the master acknowledged the write, 'majority' to return after a majority of servers in the replica set acknowledges the write). Defaults to 'majority'.
-- db: Handle (created by the MongoDB drive) to the database
+- boom: An imported instance of the boom library to return boom wrapped errors. If omitted, regular errors will be returned instead.
 
 #### acquire
 
@@ -56,25 +68,38 @@ Returns a promise that passes the lock's timestamp on success (to 'then' handler
 
 Errors:
 
-Errors are Boom objects (properties of the error can be examined in the err.output.payload object) that can have the following properties:
+Foreseen errors that are directly handled by the method can take any of the following form:
 
 ```
-err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+//With boom:
+err.output.payload.statusCode == 404 && err.output.payload.message == 'RessourceNotFound'
+
+//Without boom:
+err.type == 'notFound' && err.subtype == 'RessourceNotFound'
 ```
 
 This means the document you tried to acquire a lock on doesn't exist
 
 ```
-err.output.payload.statusCode == 409, err.output.payload.message == 'LockAlreadyTaken'
+//With boom:
+err.output.payload.statusCode == 409 && err.output.payload.message == 'LockAlreadyTaken'
+
+//Without boom:
+err.type == 'conflict' && err.subtype == 'LockAlreadyTaken'
 ```
 
 This means the lock was already acquired and you'll have to wait for the lock to be freed
 
 ```
-err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+With boom:
+err.output.payload.statusCode == 500 && err.output.payload.message == 'DbError'
+
+Without boom:
+err.type == badImplementation && err.subtype == 'DbError'
 ```
 
 Some other database error, probably a timeout on a database operation.
+
 
 #### release
 
@@ -90,22 +115,34 @@ Returns a promise that passes nothing on success (to 'then' handler) or error on
 
 Errors:
 
-Errors are Boom objects (properties of the error can be examined in the err.output.payload object) that can have the following properties:
+Foreseen errors that are directly handled by the method can take any of the following form:
 
 ```
+//With boom:
 err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+
+//Without boom:
+err.type == 'notFound' && err.subtype == 'RessourceNotFound'
 ```
 
 This means the document you tried to release a lock on doesn't exist
 
 ```
+//With boom:
 err.output.payload.statusCode == 409, err.output.payload.message == 'LockWasReacquired'
+
+//Without boom:
+err.type == 'conflict' && err.subtype == 'LockWasReacquired'
 ```
 
 This means the current lock timed out and the lock was required somewhere else
 
 ```
+//With boom:
 err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+
+//Without boom:
+err.type == badImplementation && err.subtype == 'DbError'
 ```
 
 Some other database error, probably a timeout on a database operation.
@@ -115,16 +152,17 @@ Some other database error, probably a timeout on a database operation.
 ```
 const mongoDB = require('mongodb');
 Promise = require('bluebird');
+const boom = require('boom');
 
 const monglock = require('monglock');
 
 var writeLock = null;
 
-mongoDB.MongoClient.connect("mongodb://mongodb:27017/test", {native_parser:true}, (err, db) => {
-    const testCol = db.collection('test');
+mongoDB.MongoClient.connect("mongodb://mongodb:27017", {native_parser:true}, (err, conn) => {
+    const testCol = conn.db('test').collection('test');
 
     //Build writeLock instance
-    writeLock = monglock.writeLock({'collection': 'test', 'db': db, 'locktimeout': 1000});
+    writeLock = monglock.writeLock({'collection': testCol, 'locktimeout': 1000, 'boom': boom});
 
     //Build a document to acquire a lock on
     testCol.insertOne({'_id': 1}).then(() => {
@@ -205,10 +243,10 @@ Returns a multiLock instance from which locks can be acquired and released.
 
 - locktimeouts: How long (in milliseconds) locks with various tags will be held before getting automatically released. Ideally, this value should be high enough to give operations plenty of time to complete and release the lock, but not so high that the database will require manual intervention if a process fails while holding the lock and fails to release it.
 - lockRelationships: Relationships of lock tags
-- collection: Name of the collection containing documents to acquire a lock on. Defaults to 'lock'.
+- collection: A mongodb collection instance containing documents to acquire a lock on.
 - timeout: How long single database read/write operations from the library should wait before declaring failure. Defaults to 10000 (10 seconds).
 - w: Replication parameter for write operations (1 to return after the master acknowledged the write, 'majority' to return after a majority of servers in the replica set acknowledges the write). Defaults to 'majority'.
-- db: Handle (created by the MongoDB drive) to the database
+- boom: An imported instance of the boom library to return boom wrapped errors. If omitted, regular errors will be returned instead.
 
 #### Acquire
 
@@ -224,22 +262,34 @@ Returns a promise that passes a lock on success (to 'then' handler) or error on 
 
 Errors:
 
-Errors are Boom objects (properties of the error can be examined in the err.output.payload object) that can have the following properties:
+Foreseen errors that are directly handled by the method can take any of the following form:
 
 ```
-err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+//With boom:
+err.output.payload.statusCode == 404 && err.output.payload.message == 'RessourceNotFound'
+
+//Without boom:
+err.type == 'notFound' && err.subtype == 'RessourceNotFound'
 ```
 
 This means the document you tried to acquire a lock on doesn't exist
 
 ```
-err.output.payload.statusCode == 409, err.output.payload.message == 'CooperativeLock'
+//With boom:
+err.output.payload.statusCode == 409 && err.output.payload.message == 'CooperativeLock'
+
+//Without boom:
+err.type == 'conflict' && err.subtype == 'CooperativeLock'
 ```
 
 This means the document is held by at least one lock that the lock you are trying to acquire is 'cooperative' with.
 
 ```
-err.output.payload.statusCode == 409, err.output.payload.message == 'AssertiveLock', err.output.payload.lock == <your lock>
+//With boom:
+err.output.payload.statusCode == 409 && err.output.payload.message == 'AssertiveLock', err.data == <your lock>
+
+//Without boom:
+err.type == 'conflict' && err.subtype == 'AssertiveLock' && err.lock == <your lock>
 ```
 
 This means the document is held by at least one lock that the lock you are trying to acquire is 'assertive' with.
@@ -247,7 +297,11 @@ This means the document is held by at least one lock that the lock you are tryin
 The lock was acquired, but you should make the acquire call again until all locks your lock is assertive on are freed.
 
 ```
-err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+//With boom:
+err.output.payload.statusCode == 500 && err.output.payload.message == 'DbError'
+
+//Without boom:
+err.type == badImplementation && err.subtype == 'DbError'
 ```
 
 Some other database error, probably a timeout on a database operation.
@@ -267,20 +321,29 @@ Returns a promise that passes nothing on success (to 'then' handler) or error on
 Errors:
 
 ```
+//With boom:
 err.output.payload.statusCode == 404, err.output.payload.message == 'RessourceNotFound'
+
+//Without boom:
 ```
 
 This means the document you tried to release a lock on doesn't exist
 
 ```
+//With boom:
 err.output.payload.statusCode == 409, err.output.payload.message == 'LockNotFound'
+
+//Without boom:
 ```
 
 This means the lock you tried to release in the document did not exist
 
 
 ```
+//With boom:
 err.output.payload.statusCode == 500, err.output.payload.message == 'DbError'
+
+//Without boom:
 ```
 
 Some other database error, probably a timeout on a database operation.
